@@ -7,9 +7,10 @@ import com.kakaopay.kazuya.webfluxdemo.entity.Content
 import com.kakaopay.kazuya.webfluxdemo.entity.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.withContext
+import org.slf4j.LoggerFactory
 import org.springframework.data.repository.kotlin.CoroutineCrudRepository
 import org.springframework.data.repository.reactive.ReactiveCrudRepository
 import org.springframework.stereotype.Service
@@ -21,6 +22,7 @@ import reactor.core.publisher.Mono
 import reactor.util.function.Tuple2
 import reactor.util.function.Tuples
 import java.util.concurrent.CompletableFuture
+
 
 @RestController
 class ContentController(
@@ -46,11 +48,13 @@ class ContentController(
 
 @Service
 class ContentService(
-    private val contentRepository: ContentRepository,
-    private val userRepository: UserRepository,
+    private val contentRepository: ContentCouroutineRepository,
+    private val userCoroutineRepository: UserCoroutineRepository,
     private val contentReactiveRepository: ContentReactiveRepository,
     private val userReactiveRepository: UserReactiveRepository,
 ) {
+
+    val logger = LoggerFactory.getLogger(this.javaClass)
 
     // 쉬운 병렬처리 but 기능이 단순하다.
     fun getAllByIdFuture(id: Long): CompositeResponse {
@@ -74,22 +78,17 @@ class ContentService(
             }
 
     // 코루틴은 그나마 직관적이다.
-    suspend fun getAllById(id: Long): CompositeResponse = coroutineScope {
-        val contentDeferred = async(Dispatchers.IO) {
+    suspend fun getAllById(id: Long): CompositeResponse = withContext(Dispatchers.IO) {
+        val contentDeferred = async {
             contentRepository.findAllByUserId(id).toList().map(ContentResponse::invoke)
         }
-        val userDeferred = async(Dispatchers.IO) { userRepository.findById(id)!! }
+        val userDeferred = async {
+            userCoroutineRepository.findById(id)!!
+        }
         CompositeResponse(UserResponse(userDeferred.await()), contentDeferred.await())
     }
+
 }
-
-
-// CoroutineCrudRepository
-interface ContentRepository : CoroutineCrudRepository<Content, Long> {
-    fun findAllByUserId(id: Long): Flow<Content>
-}
-
-interface UserRepository : CoroutineCrudRepository<User, Long>
 
 
 // ReactiveCrudRepository
@@ -98,3 +97,11 @@ interface ContentReactiveRepository : ReactiveCrudRepository<Content, Long> {
 }
 
 interface UserReactiveRepository : ReactiveCrudRepository<User, Long>
+
+// CoroutineCrudRepository
+interface ContentCouroutineRepository : CoroutineCrudRepository<Content, Long> {
+    fun findAllByUserId(id: Long): Flow<Content>
+}
+
+interface UserCoroutineRepository : CoroutineCrudRepository<User, Long>
+
