@@ -48,7 +48,7 @@ class ContentController(
 
 @Service
 class ContentService(
-    private val contentRepository: ContentCouroutineRepository,
+    private val contentRepository: ContentCoroutineRepository,
     private val userCoroutineRepository: UserCoroutineRepository,
     private val contentReactiveRepository: ContentReactiveRepository,
     private val userReactiveRepository: UserReactiveRepository,
@@ -99,7 +99,7 @@ interface ContentReactiveRepository : ReactiveCrudRepository<Content, Long> {
 interface UserReactiveRepository : ReactiveCrudRepository<User, Long>
 
 // CoroutineCrudRepository
-interface ContentCouroutineRepository : CoroutineCrudRepository<Content, Long> {
+interface ContentCoroutineRepository : CoroutineCrudRepository<Content, Long> {
     fun findAllByUserId(id: Long): Flow<Content>
 }
 
