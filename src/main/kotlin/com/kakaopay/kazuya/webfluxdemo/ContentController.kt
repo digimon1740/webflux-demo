@@ -8,19 +8,23 @@ import com.kakaopay.kazuya.webfluxdemo.entity.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.reactive.asFlow
 import kotlinx.coroutines.withContext
 import org.slf4j.LoggerFactory
+import org.springframework.core.io.buffer.DataBufferUtils
 import org.springframework.data.repository.kotlin.CoroutineCrudRepository
 import org.springframework.data.repository.reactive.ReactiveCrudRepository
+import org.springframework.http.MediaType
+import org.springframework.http.codec.multipart.FilePart
 import org.springframework.stereotype.Service
-import org.springframework.web.bind.annotation.GetMapping
-import org.springframework.web.bind.annotation.PathVariable
-import org.springframework.web.bind.annotation.RestController
+import org.springframework.web.bind.annotation.*
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.util.function.Tuple2
 import reactor.util.function.Tuples
+import java.io.File
 import java.util.concurrent.CompletableFuture
 
 
@@ -43,6 +47,37 @@ class ContentController(
     suspend fun get(@PathVariable userId: Long): CompositeResponse =
         contentService.getAllById(userId)
 
+    // 플로우
+    @PostMapping("upload/flow", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun uploadFlow(@RequestPart("files") fileParts: Flux<FilePart>) =
+        fileParts.asFlow().map { filePart ->
+            filePart.transferTo(File("경로"))
+                .subscribe()
+        }
+
+    // 플럭스
+    @PostMapping("upload/flux", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun uploadFlux(@RequestPart("files") fileParts: Flux<FilePart>) =
+        fileParts.flatMap { filePart ->
+            filePart.transferTo(File("경로"))
+        }
+
+    // bytes 모아서 S3 업로드
+    @PostMapping("upload/flux-bytes", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun uploadFluxToBytes(@RequestPart("files") fileParts: Flux<FilePart>): Flux<Unit> {
+        var bytesArray = ByteArray(0)
+        val publisher = fileParts.flatMap { filePart ->
+            filePart.content().map { dataBuffer ->
+                val bytes = ByteArray(dataBuffer.readableByteCount())
+                dataBuffer.read(bytes)
+                DataBufferUtils.release(dataBuffer)
+                bytesArray += bytes
+            }
+        }.doOnComplete {
+            // 누적된 byteArray를 기준으로 S3 업로드
+        }
+        return publisher
+    }
 }
 
 
