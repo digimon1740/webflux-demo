@@ -7,7 +7,9 @@ import com.kakaopay.kazuya.webfluxdemo.entity.Content
 import com.kakaopay.kazuya.webfluxdemo.entity.User
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.reactive.asFlow
@@ -20,6 +22,8 @@ import org.springframework.http.MediaType
 import org.springframework.http.codec.multipart.FilePart
 import org.springframework.stereotype.Service
 import org.springframework.web.bind.annotation.*
+import org.springframework.web.reactive.function.client.WebClient
+import org.springframework.web.reactive.function.client.awaitBody
 import reactor.core.publisher.Flux
 import reactor.core.publisher.Mono
 import reactor.util.function.Tuple2
@@ -29,8 +33,9 @@ import java.util.concurrent.CompletableFuture
 
 
 @RestController
-class ContentController(
-    private val contentService: ContentService
+class WebfluxDemoController(
+    private val contentService: ContentService,
+    private val builder: WebClient.Builder,
 ) {
     // GET http://localhost:8080/users/1/contents/future
     @GetMapping("/users/{userId}/contents/future")
@@ -46,6 +51,35 @@ class ContentController(
     @GetMapping("/users/{userId}/contents")
     suspend fun get(@PathVariable userId: Long): CompositeResponse =
         contentService.getAllById(userId)
+
+
+    data class Banner(val title: String, val message: String)
+
+    private val banner = Banner("스프링 웹플럭스 톺아보기", "웹플럭스 알고 쓰자!")
+    private val client = builder.baseUrl("http://localhost:8080/").build()
+
+    @GetMapping("/suspend")
+    @ResponseBody
+    suspend fun suspendingEndpoint(): Banner {
+        delay(10)
+        return banner
+    }
+
+    @GetMapping("/sequential-flow", produces = [MediaType.TEXT_EVENT_STREAM_VALUE])
+    @ResponseBody
+    suspend fun sequentialFlow() = flow<Banner> {
+        while (true) {
+            emit(
+                client
+                    .get()
+                    .uri("/suspend")
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .awaitBody<Banner>()
+            )
+            delay(1000)
+        }
+    }
 
     // 플로우
     @PostMapping("upload/flow", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
