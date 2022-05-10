@@ -96,6 +96,21 @@ class WebfluxDemoController(
             filePart.transferTo(File("경로"))
         }
 
+    data class Email(
+        val email: String? = null
+    )
+
+    @PostMapping("users/{id}", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
+    fun userProfile(
+        @ModelAttribute email: Email,
+        @RequestPart("avatarUrl") fileParts: Flux<FilePart>
+    ) =
+        fileParts.flatMap { filePart ->
+            val emailStr = email
+            println("이메일 : $email ")
+            filePart.transferTo(File("경로"))
+        }
+
     // bytes 모아서 S3 업로드
     @PostMapping("upload/flux-bytes", consumes = [MediaType.MULTIPART_FORM_DATA_VALUE])
     fun uploadFluxToBytes(@RequestPart("files") fileParts: Flux<FilePart>): Flux<Unit> {
